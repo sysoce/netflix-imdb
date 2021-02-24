@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Netflix IMDB Ratings
-// @version      1.12
+// @version      1.13
 // @description  Show IMDB ratings on Netflix
-// @author       Ioannis Ioannou
+// @author       Ioannis Ioannou, sysoce
 // @match        https://www.netflix.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
@@ -14,10 +14,10 @@
 // @grant        GM_removeValueChangeListener
 // @grant        GM_openInTab
 // @connect      imdb.com
-// @resource     customCSS  https://raw.githubusercontent.com/ioannisioannou16/netflix-imdb/master/netflix-imdb.css
-// @resource     imdbIcon   https://raw.githubusercontent.com/ioannisioannou16/netflix-imdb/master/imdb-icon.png
-// @updateURL    https://github.com/ioannisioannou16/netflix-imdb/raw/master/netflix-imdb.user.js
-// @downloadURL  https://github.com/ioannisioannou16/netflix-imdb/raw/master/netflix-imdb.user.js
+// @resource     customCSS  https://raw.githubusercontent.com/sysoce/netflix-imdb/master/netflix-imdb.css
+// @resource     imdbIcon   https://raw.githubusercontent.com/sysoce/netflix-imdb/master/imdb-icon.png
+// @updateURL    https://github.com/sysoce/netflix-imdb/raw/master/netflix-imdb.user.js
+// @downloadURL  https://github.com/sysoce/netflix-imdb/raw/master/netflix-imdb.user.js
 // ==/UserScript==
 
 (function() {
@@ -197,19 +197,12 @@
         return node;
     }
 
-    function findAncestor (el, cls) {
-        while(el && !el.classList.contains(cls)) {
-            el = el.parentNode;
-        }
-        return el;
-    }
-
     var rootElement = document.getElementById("appMountPoint");
 
     if (!rootElement) return;
 
     function imdbRenderingForCard(node) {
-        var titleNode = node.querySelector(".bob-title");
+        var titleNode = node.querySelector(".fallback-text");
         var title = titleNode && titleNode.textContent;
         if (!title) return;
         var ratingNode = getRatingNode(title);
@@ -217,35 +210,19 @@
         node.appendChild(ratingNode);
     }
 
+    var renderingForCards = function(node) {
+        var cards = node.getElementsByClassName("slider-item");
+        for (var k = 0; k < cards.length; k++) {
+            imdbRenderingForCard(cards[k]);
+        }
+    };
+
     function imdbRenderingForTrailer(node) {
         var titleNode = node.querySelector(".title-logo");
         var title = titleNode && titleNode.getAttribute("alt");
         if (!title) return;
         var ratingNode = getRatingNode(title);
         titleNode.parentNode.insertBefore(ratingNode, titleNode.nextSibling);
-    }
-
-    function imdbRenderingForOverview(node) {
-        var text = node.querySelector(".image-fallback-text");
-        var logo = node.querySelector(".logo");
-        var titleFromText = text && text.textContent;
-        var titleFromImage = logo && logo.getAttribute("alt");
-        var title = titleFromText || titleFromImage;
-        if (!title) return;
-        var meta = node.querySelector(".meta");
-        if (!meta) return;
-        var ratingNode = getRatingNode(title);
-        meta.parentNode.insertBefore(ratingNode, meta.nextSibling);
-    }
-
-    function imdbRenderingForMoreLikeThis(node) {
-        var titleNode = node.querySelector(".video-artwork");
-        var title = titleNode && titleNode.getAttribute("alt");
-        if (!title) return;
-        var meta = node.querySelector(".meta");
-        if (!meta) return;
-        var ratingNode = getRatingNode(title);
-        meta.parentNode.insertBefore(ratingNode, meta.nextSibling);
     }
 
     function cacheTitleRanking(node) {
@@ -263,32 +240,13 @@
                 var newNode = newNodes[j];
                 if (!(newNode instanceof HTMLElement)) continue;
 
-                if (newNode.classList.contains("bob-card")) {
+                if (newNode.classList.contains("slider-item")) {
                     imdbRenderingForCard(newNode);
                     continue;
                 }
 
-                var trailer = newNode.querySelector(".billboard-row");
-                if (trailer) {
-                    imdbRenderingForTrailer(trailer);
-                    continue;
-                }
-
-                var meta = newNode.classList.contains("meta") ? newNode : null;
-                meta = meta || newNode.querySelector(".meta");
-                if (meta) {
-                    var jawBonePane = findAncestor(meta, "jawBonePane");
-                    if (jawBonePane && !jawBonePane.classList.contains("js-transition-node")) {
-                        if (jawBonePane.id === "pane-Overview") {
-                            var jBone = findAncestor(jawBonePane, "jawBone");
-                            jBone && imdbRenderingForOverview(jBone);
-                        } else if (jawBonePane.id === "pane-MoreLikeThis") {
-                            var allSimsLockup = newNode.getElementsByClassName("simsLockup");
-                            allSimsLockup && Array.prototype.forEach.call(allSimsLockup, function(node) { imdbRenderingForMoreLikeThis(node); });
-                        }
-                    }
-                    continue;
-                }
+                renderingForCards(newNode);
+                imdbRenderingForTrailer(newNode);
 
                 var titleCards = newNode.getElementsByClassName("title-card-container");
                 if (titleCards) {
@@ -299,14 +257,14 @@
         }
     };
 
+
     var observer = new MutationObserver(observerCallback);
 
     var observerConfig = { childList: true, subtree: true };
 
     observer.observe(document, observerConfig);
 
-    var existingOverview = document.querySelector(".jawBone");
-    existingOverview && imdbRenderingForOverview(existingOverview);
+    renderingForCards(document);
 
     var existingTrailer = document.querySelector(".billboard-row");
     existingTrailer && imdbRenderingForTrailer(existingTrailer);
